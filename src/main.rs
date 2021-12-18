@@ -3,20 +3,36 @@ use hyper::{
     service::{make_service_fn, service_fn},
     Body, Request, Response, Server,
 };
-use std::env; 
 use prometheus::{Encoder, Gauge, TextEncoder};
 use reqwest;
+use std::env;
 
 use lazy_static::lazy_static;
-use prometheus::{labels, opts, register_gauge };
+use prometheus::{labels, opts, register_gauge};
+use core::str::Split;
 
 lazy_static! {
-    static ref NUNDB_OPLOG_PEDDING_OPS: Gauge = register_gauge!(opts!(
-        "nun_db_oplog_pending_ops",
+    static ref NUNDB_OP_LOG_PEDDING_OPS: Gauge = register_gauge!(opts!(
+        "nun_db_op_log_pending_ops",
         "Number pedding ops in oplog from primary to secoundaries",
         labels! {"databases" => "all",}
     ))
     .unwrap();
+
+    static ref NUNDB_OP_LOG_FILE_SIZE: Gauge = register_gauge!(opts!(
+        "nun_db_op_log_file_size",
+        "Op log file size  in bytes",
+        labels! {"databases" => "all",}
+    ))
+    .unwrap();
+
+    static ref NUNDB_OP_LOG_OPS: Gauge = register_gauge!(opts!(
+        "nun_db_op_log_OPS",
+        "Count of oplog operations stored in the op log file",
+        labels! {"databases" => "all",}
+    ))
+    .unwrap();
+
 }
 pub fn get_nun_db_user() -> String {
     match env::var_os("NUN_USER") {
@@ -38,29 +54,52 @@ pub fn get_nun_db_url() -> String {
         None => panic!("env NUN_DB_URL is mandatory"),
     }
 }
+fn get_next_value(values: &mut Split<&str>) ->  f64 {
+    let str_parts = values.next().unwrap();
+    println!(
+        "str_parts: {}",
+        str_parts,
+    );
+    let mut parts = str_parts.trim().split(" ");
+    parts.next(); //Key
+    let str_value = parts.next().unwrap();
+    str_value.parse::<f64>().unwrap()
+}
 
-async fn get_oplog_pending_ops() -> f64 {
+async fn get_oplog_pending_ops() -> (f64, f64, f64) {
     let client = reqwest::Client::new();
     let res = client
         .post(get_nun_db_url())
-        .body(format!("auth {} {};oplog-state", get_nun_db_user(), get_nun_db_pwd()))
+        .body(format!(
+            "auth {} {};oplog-state",
+            get_nun_db_user(),
+            get_nun_db_pwd()
+        ))
         .send()
         .await;
 
     let text = res.unwrap().text().await.unwrap();
-    let mut rep_parts = text.splitn(2,";");
+    let mut rep_parts = text.splitn(2, ";");
     rep_parts.next();
     let opps = rep_parts.next().unwrap();
     let mut parts = opps.splitn(2, " ");
-    parts.next();//Command oplog-state
+    parts.next(); //Command oplog-state
+
     let mut values = parts.next().unwrap().split(",");
-    let pedding_ops_str = values.next().unwrap();
-    let mut pedding_ops_parts = pedding_ops_str.split(" ");
-    pedding_ops_parts.next();//Key
-    let pedding_ops = pedding_ops_parts.next().unwrap();
-    //parse the opcount here
-    println!("ops: {}", pedding_ops);
-    pedding_ops.parse::<f64>().unwrap()
+
+    let pedding_ops = get_next_value(&mut values);
+    let op_log_file_size = get_next_value(&mut values);
+    let op_log_count = get_next_value(&mut values);
+
+    println!(
+        "pedding_ops: {}, op_log_file_size: {}",
+        pedding_ops, op_log_file_size
+    );
+    (
+        pedding_ops,
+        op_log_file_size,
+        op_log_count,
+    )
 }
 
 async fn serve_req(_req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
@@ -69,7 +108,11 @@ async fn serve_req(_req: Request<Body>) -> Result<Response<Body>, hyper::Error> 
     let metric_families = prometheus::gather();
     let mut buffer = vec![];
     encoder.encode(&metric_families, &mut buffer).unwrap();
-    NUNDB_OPLOG_PEDDING_OPS.set(get_oplog_pending_ops().await);
+    let (pedding_ops, op_log_file_size, op_log_count) =  get_oplog_pending_ops().await;
+
+    NUNDB_OP_LOG_PEDDING_OPS.set(pedding_ops);
+    NUNDB_OP_LOG_FILE_SIZE.set(op_log_file_size);
+    NUNDB_OP_LOG_OPS.set(op_log_count);
 
     let response = Response::builder()
         .status(200)
@@ -93,8 +136,6 @@ async fn main() {
         eprintln!("server error: {}", err);
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {

@@ -3,11 +3,8 @@ FROM ekidd/rust-musl-builder:stable as builder
 RUN USER=root cargo new --bin nun-db-prometheus-exporter
 WORKDIR ./nun-db-prometheus-exporter
 
-COPY ./Cargo.toml ./Cargo.toml
-RUN cargo build --release
-RUN rm src/*.rs
 ADD . ./
-RUN rm ./target/x86_64-unknown-linux-musl/release/deps/nun*
+COPY ./Cargo.toml ./Cargo.toml
 RUN cargo build --release
 RUN ls -al /home/rust/src/nun-db-prometheus-exporter/target/x86_64-unknown-linux-musl/release
 

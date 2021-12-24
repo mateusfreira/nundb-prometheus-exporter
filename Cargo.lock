@@ -429,7 +429,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "nundb-prometheus-exporter"
+name = "nun-db-prometheus-exporter"
 version = "0.1.0"
 dependencies = [
  "hyper",

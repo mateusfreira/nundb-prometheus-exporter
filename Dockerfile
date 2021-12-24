@@ -15,6 +15,6 @@ RUN cargo build --release
 FROM alpine:3.15
 
 RUN apk add libressl-dev
-COPY --from=builder /home/rust/src/nun-db/target/x86_64-unknown-linux-musl/release/prometheus-exporter /usr/bin/prometheus-exporter
+COPY --from=builder /home/rust/src/nun-db/target/x86_64-unknown-linux-musl/release/nun-db-prometheus-exporter /usr/bin/nun-db-prometheus-exporter
 
-ENTRYPOINT  [ "prometheus-exporter" ]
+ENTRYPOINT  [ "nun-db-prometheus-exporter" ]

@@ -9,7 +9,7 @@ RUN rm src/*.rs
 ADD . ./
 RUN rm ./target/x86_64-unknown-linux-musl/release/deps/nun*
 RUN cargo build --release
-RUN ls -al /home/rust/src/nun-db-prometheus-exporter/target
+RUN ls -al /home/rust/src/nun-db-prometheus-exporter/target/x86_64-unknown-linux-musl/release
 
 FROM alpine:3.15
 
